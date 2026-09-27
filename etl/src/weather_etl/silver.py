@@ -10,6 +10,7 @@ from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
 from weather_etl.config import City
+from weather_etl.dq import check_silver_batch, raise_on_hard_failures, write_results
 from weather_etl.openmeteo import HOURLY_VARS
 from weather_etl.paths import table_path
 
@@ -102,9 +103,12 @@ def build_silver(spark: SparkSession, root: Path, cities: list[City], run_id: st
         return 0
     batch = parse_bronze(pending, cities_frame(spark, cities)).cache()
     try:
-        n = batch.count()
-        if n:
-            merge_silver(spark, root, batch)
-        return n
+        results = check_silver_batch(batch, {c.id for c in cities})
+        if not results:
+            return 0
+        write_results(root, run_id, results)
+        raise_on_hard_failures(results)
+        merge_silver(spark, root, batch)
+        return batch.count()
     finally:
         batch.unpersist()
