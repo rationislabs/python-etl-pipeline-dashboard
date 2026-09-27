@@ -215,3 +215,16 @@ credentials.json
 *.csv
 *.zip
 output/delta_tables/
+# AI tooling: never commit (Claude Code, Serena, MCP, skills/plugins)
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.mcp.json
+.serena/
+.superpowers/
+docs/superpowers/
+graphify-out/
+.caveman*
+.headroom/
+.worktrees/
