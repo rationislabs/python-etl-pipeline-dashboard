@@ -65,6 +65,15 @@ def lake(tmp_path) -> Path:
     return p
 
 
+@pytest.fixture(scope="session")
+def spark():
+    from weather_etl.spark import get_session
+
+    session = get_session("weather-etl-tests", master="local[2]")
+    yield session
+    session.stop()
+
+
 @pytest.fixture
 def cities() -> list[City]:
     return [
