@@ -1,0 +1,23 @@
+# ERA5 grid is ~25 km: each city is the grid cell nearest these coordinates.
+# demo: true marks the 3 cities used when DEMO=1.
+cities:
+  - {id: singapore, name: Singapore, country: SG, lat: 1.29, lon: 103.85, tz: Asia/Singapore, climate: tropical, demo: true}
+  - {id: mumbai, name: Mumbai, country: IN, lat: 19.08, lon: 72.88, tz: Asia/Kolkata, climate: tropical}
+  - {id: lagos, name: Lagos, country: NG, lat: 6.52, lon: 3.38, tz: Africa/Lagos, climate: tropical}
+  - {id: manaus, name: Manaus, country: BR, lat: -3.12, lon: -60.02, tz: America/Manaus, climate: tropical}
+  - {id: cairo, name: Cairo, country: EG, lat: 30.04, lon: 31.24, tz: Africa/Cairo, climate: arid}
+  - {id: phoenix, name: Phoenix, country: US, lat: 33.45, lon: -112.07, tz: America/Phoenix, climate: arid}
+  - {id: riyadh, name: Riyadh, country: SA, lat: 24.71, lon: 46.68, tz: Asia/Riyadh, climate: arid}
+  - {id: alice_springs, name: Alice Springs, country: AU, lat: -23.70, lon: 133.88, tz: Australia/Darwin, climate: arid}
+  - {id: vienna, name: Vienna, country: AT, lat: 48.21, lon: 16.37, tz: Europe/Vienna, climate: temperate, demo: true}
+  - {id: london, name: London, country: GB, lat: 51.51, lon: -0.13, tz: Europe/London, climate: temperate}
+  - {id: sydney, name: Sydney, country: AU, lat: -33.87, lon: 151.21, tz: Australia/Sydney, climate: temperate}
+  - {id: buenos_aires, name: Buenos Aires, country: AR, lat: -34.60, lon: -58.38, tz: America/Argentina/Buenos_Aires, climate: temperate}
+  - {id: tokyo, name: Tokyo, country: JP, lat: 35.68, lon: 139.69, tz: Asia/Tokyo, climate: temperate}
+  - {id: cape_town, name: Cape Town, country: ZA, lat: -33.92, lon: 18.42, tz: Africa/Johannesburg, climate: temperate}
+  - {id: moscow, name: Moscow, country: RU, lat: 55.76, lon: 37.62, tz: Europe/Moscow, climate: continental}
+  - {id: chicago, name: Chicago, country: US, lat: 41.88, lon: -87.63, tz: America/Chicago, climate: continental}
+  - {id: harbin, name: Harbin, country: CN, lat: 45.80, lon: 126.53, tz: Asia/Shanghai, climate: continental}
+  - {id: reykjavik, name: Reykjavík, country: IS, lat: 64.15, lon: -21.94, tz: Atlantic/Reykjavik, climate: polar edge}
+  - {id: yakutsk, name: Yakutsk, country: RU, lat: 62.03, lon: 129.73, tz: Asia/Yakutsk, climate: polar edge, demo: true}
+  - {id: nuuk, name: Nuuk, country: GL, lat: 64.18, lon: -51.72, tz: America/Nuuk, climate: polar edge}
