@@ -1,0 +1,39 @@
+[project]
+name = "weather-lakehouse"
+version = "0.1.0"
+description = "ERA5 weather lakehouse: Airflow + PySpark + Delta Lake, Dash dashboard"
+requires-python = ">=3.12,<3.13"
+dependencies = ["weather-etl", "weather-dash"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+weather-etl = { workspace = true }
+weather-dash = { workspace = true }
+
+[tool.uv.workspace]
+members = ["etl", "dashboard"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4",
+  "pytest-cov>=6.2",
+  "respx>=0.23",
+  "ruff>=0.12",
+  "invoke>=2.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["etl/tests", "dashboard/tests"]
+addopts = "--import-mode=importlib -ra"
+markers = ["spark: needs a local SparkSession (Java 17+)"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["lakehouse", "lakehouse-e2e"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]  # ruff format owns line length; long string literals are allowed

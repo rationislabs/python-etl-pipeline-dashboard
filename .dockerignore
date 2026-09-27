@@ -1,0 +1,13 @@
+.git
+.venv
+**/__pycache__
+**/.pytest_cache
+lakehouse
+lakehouse-e2e
+.claude
+.serena
+.superpowers
+docs
+graphify-out
+*.md
+!README.md

@@ -1,6 +1,0 @@
-pandas==2.2.2
-pyspark==3.5.3
-delta-spark==3.2.1
-google-cloud-bigquery==3.25.0
-apache-airflow==2.10.2
-google-cloud-storage==2.18.2

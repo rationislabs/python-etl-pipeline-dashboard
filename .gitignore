@@ -228,3 +228,10 @@ graphify-out/
 .caveman*
 .headroom/
 .worktrees/
+
+# Local lakehouse data and Spark scratch
+lakehouse/
+lakehouse-e2e/
+spark-warehouse/
+metastore_db/
+derby.log
