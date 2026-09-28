@@ -103,6 +103,12 @@ def test_refine_with_recent_data_only_succeeds(spark, env, fake_client):
     assert not soft.passed.iloc[0]
 
 
+def test_backfill_started(env, fake_client):
+    assert pipeline.backfill_started() is False
+    pipeline.ingest_one("vienna", 2023, today=TODAY, client=fake_client)
+    assert pipeline.backfill_started() is True
+
+
 def test_previous_year_plan(env, fake_client):
     pipeline.ingest_one("vienna", 2023, today=TODAY, client=fake_client)
     assert pipeline.previous_year_plan(today=TODAY) == []

@@ -4,6 +4,35 @@ x-lakehouse-volume: &lakehouse
   - ${LAKEHOUSE_DIR:-./lakehouse}:/lakehouse
   - ./config:/app/config:ro
 
+x-airflow: &airflow
+  image: weather-airflow:local
+  pull_policy: never
+  volumes:
+    - ${LAKEHOUSE_DIR:-./lakehouse}:/lakehouse
+    - ./config:/app/config:ro
+    - ./airflow/dags:/opt/airflow/dags:ro
+    - ./airflow/tests:/opt/airflow/tests:ro
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: local-dev-only-jwt-secret
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+    AIRFLOW__CORE__MAX_MAP_LENGTH: "4096"
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
+    DEMO: ${DEMO:-0}
+    FIRST_YEAR: ${FIRST_YEAR:-}
+    BASELINE_START: ${BASELINE_START:-1991}
+    BASELINE_END: ${BASELINE_END:-2020}
+    CITIES_FILE: ${CITIES_FILE:-/app/config/cities.yaml}
+    SPARK_MASTER: spark://spark-master:7077
+    SPARK_DRIVER_HOST: airflow-scheduler
+  depends_on: &airflow-deps
+    postgres: {condition: service_healthy}
+
 services:
   spark-master:
     build:
@@ -32,3 +61,69 @@ services:
       spark-master: {condition: service_healthy}
 
   spark-worker-2: *worker
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes: [postgres-db:/var/lib/postgresql/data]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 10
+
+  airflow-init:
+    <<: *airflow
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+      additional_contexts:
+        base: service:spark-master
+    pull_policy: build
+    command: ["bash", "-c", "airflow db migrate && airflow pools set open_meteo 1 'Open-Meteo API' && airflow pools set spark_jobs 1 'Spark jobs'"]
+    restart: "no"
+
+  airflow-apiserver:
+    <<: *airflow
+    command: ["airflow", "api-server"]
+    ports: ["8080:8080"]
+    mem_limit: 1g
+    depends_on:
+      <<: *airflow-deps
+      airflow-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 15s
+      retries: 20
+
+  airflow-scheduler:
+    <<: *airflow
+    hostname: airflow-scheduler
+    command: ["airflow", "scheduler"]
+    mem_limit: 3g
+    depends_on:
+      <<: *airflow-deps
+      airflow-init: {condition: service_completed_successfully}
+      spark-master: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      retries: 10
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: ["airflow", "dag-processor"]
+    mem_limit: 512m
+    depends_on:
+      <<: *airflow-deps
+      airflow-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      retries: 10
+
+volumes:
+  postgres-db:

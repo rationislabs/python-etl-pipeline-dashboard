@@ -9,7 +9,7 @@ from uuid import uuid4
 from weather_etl.config import City, Settings, active_cities, load_cities, load_settings
 from weather_etl.ingest import ingest_city_year, ingest_recent, plan_backfill, plan_previous_year
 from weather_etl.openmeteo import ArchiveClient
-from weather_etl.ops import completed
+from weather_etl.ops import completed, read_ingest_log
 from weather_etl.ratelimit import CallBudget
 
 if TYPE_CHECKING:
@@ -50,6 +50,12 @@ def ingest_one(city_id: str, year: int, today: date | None = None, client=None) 
         city, year, settings.lakehouse, client or _client(settings), today or today_utc()
     )
     return {**row, "fetched_at": row["fetched_at"].isoformat()}
+
+
+def backfill_started() -> bool:
+    """False until any city-year has been ingested, so daily_refresh stays idle on a fresh stack."""
+    settings, _ = _context()
+    return not read_ingest_log(settings.lakehouse).empty
 
 
 def ingest_recent_all(today: date | None = None, client=None, days: int = 14) -> int:
