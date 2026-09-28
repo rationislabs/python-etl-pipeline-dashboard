@@ -25,7 +25,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["etl/tests", "dashboard/tests"]
+testpaths = ["etl/tests", "dashboard/tests", "tests"]
 addopts = "--import-mode=importlib -ra"
 markers = ["spark: needs a local SparkSession (Java 17+)"]
 

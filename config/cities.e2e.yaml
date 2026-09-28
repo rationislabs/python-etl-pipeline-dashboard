@@ -1,0 +1,2 @@
+cities:
+  - {id: vienna, name: Vienna, country: AT, lat: 48.21, lon: 16.37, tz: Europe/Vienna, climate: temperate, demo: true}
