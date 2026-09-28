@@ -125,5 +125,27 @@ services:
       interval: 30s
       retries: 10
 
+  dash:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    image: weather-dash:local
+    pull_policy: never
+    ports: ["8050:8050"]
+    volumes:
+      - ${LAKEHOUSE_DIR:-./lakehouse}:/lakehouse:ro
+      - ./config:/app/config:ro
+    environment:
+      DEMO: ${DEMO:-0}
+      FIRST_YEAR: ${FIRST_YEAR:-}
+      BASELINE_START: ${BASELINE_START:-1991}
+      BASELINE_END: ${BASELINE_END:-2020}
+      CITIES_FILE: ${CITIES_FILE:-/app/config/cities.yaml}
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8050/')"]
+      interval: 15s
+      retries: 10
+
 volumes:
   postgres-db:

@@ -203,6 +203,8 @@ def _doy_dates(doy: pd.Series) -> pd.Series:
 
 
 def seasonality_band(clim, daily, cities, city_id, year, mode, message="No data yet"):
+    if clim.empty:
+        return empty_figure(message, mode)
     c = clim[clim["city_id"] == city_id].sort_values("doy")
     if c.empty:
         return empty_figure(message, mode)
@@ -261,6 +263,8 @@ def seasonality_band(clim, daily, cities, city_id, year, mode, message="No data 
 
 
 def monthly_heatmap(monthly, cities, city_id, mode, message="No data yet"):
+    if monthly.empty:
+        return empty_figure(message, mode)
     d = monthly[monthly["city_id"] == city_id]
     if d.empty:
         return empty_figure(message, mode)
@@ -330,6 +334,8 @@ def extremes_figure(ext, cities, city_ids, years, mode, message="No data yet"):
 
 
 def ridgeline(dist, cities, city_id, mode, message="No data yet"):
+    if dist.empty:
+        return empty_figure(message, mode)
     d = dist[dist["city_id"] == city_id]
     if d.empty:
         return empty_figure(message, mode)

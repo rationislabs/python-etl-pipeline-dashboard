@@ -1,0 +1,39 @@
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e;
+  --muted: #898781; --grid: #e1e0d9; --axis: #c3c2b7; --accent: #2a78d6;
+}
+[data-theme="dark"] {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7;
+  --muted: #898781; --grid: #2c2c2a; --axis: #383835; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+       font: 14px/1.5 Inter, system-ui, sans-serif; }
+.app { max-width: 1320px; margin: 0 auto; padding: 0 24px 32px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 24px;
+          padding: 20px 0; border-bottom: 1px solid var(--grid); flex-wrap: wrap; }
+.topbar h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.subtitle { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.topbar nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.navlink { color: var(--ink2); text-decoration: none; padding: 6px 12px; border-radius: 6px; }
+.navlink:hover { background: var(--surface); color: var(--ink); }
+.theme-toggle label { margin-left: 12px; color: var(--ink2); }
+.filters { display: grid; grid-template-columns: 2fr 3fr; gap: 24px; padding: 16px 0;
+           border-bottom: 1px solid var(--grid); }
+.filter span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.content h2 { margin: 24px 0 4px; font-size: 18px; }
+.lede { margin: 0 0 16px; color: var(--ink2); max-width: 780px; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+.kpi { background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 16px; }
+.kpi-label, .kpi-detail { display: block; color: var(--muted); font-size: 12px; }
+.kpi-value { display: block; font-size: 28px; font-weight: 600; margin: 4px 0;
+             font-variant-numeric: tabular-nums; }
+.controls { display: grid; grid-template-columns: 240px 140px; gap: 12px; margin: 8px 0; }
+.stats { width: 100%; border-collapse: collapse; margin-top: 16px; font-variant-numeric: tabular-nums; }
+.stats th, .stats td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--grid); }
+.stats th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.muted { color: var(--muted); }
+.footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--grid);
+          color: var(--muted); font-size: 12px; }
+.footer a { color: var(--accent); }
+@media (max-width: 800px) { .filters, .kpis { grid-template-columns: 1fr; } }
