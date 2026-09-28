@@ -230,7 +230,8 @@ graphify-out/
 .worktrees/
 
 # Local lakehouse data and Spark scratch
-lakehouse/
+lakehouse/*
+!lakehouse/.gitkeep
 lakehouse-e2e/
 spark-warehouse/
 metastore_db/

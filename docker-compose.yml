@@ -1,0 +1,34 @@
+name: weather-lakehouse
+
+x-lakehouse-volume: &lakehouse
+  - ${LAKEHOUSE_DIR:-./lakehouse}:/lakehouse
+  - ./config:/app/config:ro
+
+services:
+  spark-master:
+    build:
+      context: .
+      dockerfile: docker/base.Dockerfile
+      args:
+        LOCAL_UID: ${LOCAL_UID:-1000}
+    image: weather-base:local
+    hostname: spark-master
+    command: ["/bin/sh", "-c", "$$SPARK_HOME/bin/spark-class org.apache.spark.deploy.master.Master --host spark-master --port 7077 --webui-port 8081"]
+    ports: ["8081:8081"]
+    volumes: *lakehouse
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8081"]
+      interval: 10s
+      retries: 12
+
+  spark-worker-1: &worker
+    image: weather-base:local
+    pull_policy: never
+    command: ["/bin/sh", "-c", "$$SPARK_HOME/bin/spark-class org.apache.spark.deploy.worker.Worker --cores 2 --memory 1g spark://spark-master:7077"]
+    volumes: *lakehouse
+    mem_limit: 1536m
+    depends_on:
+      spark-master: {condition: service_healthy}
+
+  spark-worker-2: *worker
