@@ -62,3 +62,52 @@ def completed(root: Path) -> set[tuple[str, int]]:
     log = read_ingest_log(root)
     done = log[log["status"] == "complete"]
     return {(str(r.city_id), int(r.year)) for r in done.itertuples()}
+
+
+STATS_SCHEMA = pa.schema(
+    [
+        ("layer", pa.string()),
+        ("table_name", pa.string()),
+        ("row_count", pa.int64()),
+        ("max_ts", pa.timestamp("us", tz="UTC")),
+        ("updated_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
+
+
+def write_pipeline_stats(spark, root: Path) -> None:
+    """Row counts and freshness per table, so the dashboard never scans silver."""
+    from datetime import UTC, datetime
+
+    from delta.tables import DeltaTable as SparkDeltaTable
+    from pyspark.sql import functions as F
+
+    from weather_etl.gold import GOLD_TABLES
+
+    targets = [("bronze", "weather_raw", "fetched_at"), ("silver", "weather_hourly", "ts_utc")]
+    targets += [("gold", name, None) for name in GOLD_TABLES]
+    now = datetime.now(UTC)
+    rows = []
+    for layer, name, ts_col in targets:
+        path = table_path(root, layer, name)
+        if not SparkDeltaTable.isDeltaTable(spark, path):
+            continue
+        aggs = [F.count("*").alias("n")]
+        if ts_col:
+            aggs.append(F.max(ts_col).cast("long").alias("ts"))
+        r = spark.read.format("delta").load(path).agg(*aggs).first()
+        ts = r["ts"] if ts_col else None
+        rows.append(
+            {
+                "layer": layer,
+                "table_name": name,
+                "row_count": int(r["n"]),
+                "max_ts": datetime.fromtimestamp(ts, UTC) if ts is not None else None,
+                "updated_at": now,
+            }
+        )
+    write_deltalake(
+        table_path(root, "ops", "pipeline_stats"),
+        pa.Table.from_pylist(rows, schema=STATS_SCHEMA),
+        mode="overwrite",
+    )
