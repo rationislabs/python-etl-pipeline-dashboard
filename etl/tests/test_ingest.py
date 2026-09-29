@@ -122,3 +122,27 @@ def test_ingest_recent_fetches_trailing_window(lake, fake_client):
     assert fake_client.calls == [(1, 2, date(2023, 12, 27), date(2024, 1, 9))]
     assert path.exists()
     assert read_ingest_log(lake).empty
+
+
+def test_ingest_recent_refetches_gap_after_downtime(lake, fake_client):
+    city = City(id="x", name="X", country="X", lat=1, lon=2, tz="UTC", climate="arid")
+    last = datetime(2024, 5, 1, 6, tzinfo=UTC)  # 40 days before today
+    row = {"city_id": "x", "year": 2024, "status": "partial", "rows": 2900, "fetched_at": last}
+    upsert_ingest_log(lake, [row])
+    ingest_recent(city, lake, fake_client, date(2024, 6, 10))
+    assert fake_client.calls == [(1, 2, date(2024, 4, 24), date(2024, 6, 9))]
+    log = read_ingest_log(lake).iloc[0]
+    assert (log["status"], log["rows"]) == ("partial", 2900)
+    assert log["fetched_at"] > last
+
+    ingest_recent(city, lake, fake_client, date(2024, 6, 11))  # back to the normal window
+    assert fake_client.calls[-1] == (1, 2, date(2024, 5, 28), date(2024, 6, 10))
+
+
+def test_ingest_recent_never_reaches_before_jan_1(lake, fake_client):
+    city = City(id="x", name="X", country="X", lat=1, lon=2, tz="UTC", climate="arid")
+    last = datetime(2024, 1, 3, tzinfo=UTC)
+    row = {"city_id": "x", "year": 2024, "status": "partial", "rows": 48, "fetched_at": last}
+    upsert_ingest_log(lake, [row])
+    ingest_recent(city, lake, fake_client, date(2024, 1, 20))
+    assert fake_client.calls == [(1, 2, date(2024, 1, 1), date(2024, 1, 19))]

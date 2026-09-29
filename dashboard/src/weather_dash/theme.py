@@ -1,4 +1,4 @@
-"""Chart palette (dataviz skill reference instance, validated 2026-09-27) and Plotly templates."""
+"""Reference chart palette (validated for CVD separation and contrast 2026-09-27) and templates."""
 
 from __future__ import annotations
 

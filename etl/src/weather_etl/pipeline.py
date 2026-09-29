@@ -69,18 +69,22 @@ def ingest_recent_all(today: date | None = None, client=None, days: int = 14) ->
 def refine(today: date | None = None, spark: SparkSession | None = None) -> dict[str, int]:
     from weather_etl.bronze import load_landing
     from weather_etl.dq import check_gold, check_silver_table, raise_on_hard_failures, write_results
-    from weather_etl.gold import build_gold
+    from weather_etl.gold import GOLD_TABLES, build_gold
     from weather_etl.ops import write_pipeline_stats
-    from weather_etl.silver import build_silver, silver_exists
-    from weather_etl.spark import get_session
+    from weather_etl.paths import table_path
+    from weather_etl.silver import SILVER, build_silver, silver_exists
+    from weather_etl.spark import get_session, vacuum
 
-    settings, cities = _context()
+    settings = load_settings()
+    configured = load_cities(settings.cities_file)
+    cities = active_cities(configured, settings.demo)
     root, today, run_id = settings.lakehouse, today or today_utc(), uuid4().hex
     owns_session = spark is None
     spark = spark or get_session("weather-refine")
     try:
         counts = {"bronze_loaded": load_landing(spark, root)}
-        counts["silver_merged"] = build_silver(spark, root, cities, run_id)
+        # All configured cities: bronze from an earlier full run must not fail a DEMO refine.
+        counts["silver_merged"] = build_silver(spark, root, configured, run_id)
         if silver_exists(spark, root):
             write_results(
                 root, run_id, check_silver_table(spark, root, today, {c.id for c in cities})
@@ -91,6 +95,8 @@ def refine(today: date | None = None, spark: SparkSession | None = None) -> dict
             write_results(root, run_id, gold_results)
             raise_on_hard_failures(gold_results)
             write_pipeline_stats(spark, root)
+            for layer, name in [SILVER, *(("gold", n) for n in GOLD_TABLES)]:
+                vacuum(spark, table_path(root, layer, name))
         return counts
     finally:
         if owns_session:

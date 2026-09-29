@@ -58,3 +58,9 @@ def test_empty_message(lake_env):
         ),
     )
     assert data.empty_message(data.Lakehouse(lake_env), cities).startswith("Backfill in progress:")
+
+
+def test_get_cities_honours_demo(lake_env, monkeypatch):
+    monkeypatch.setenv("DEMO", "1")
+    data.get_cities.cache_clear()
+    assert list(data.get_cities().id) == ["singapore", "vienna"]

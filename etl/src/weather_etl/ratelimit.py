@@ -1,4 +1,4 @@
-"""Rolling weighted-call budget in SQLite, shared by all ingest processes on one host."""
+"""Weighted-call budget in SQLite (UTC calendar day, rolling hour/minute), shared per host."""
 
 from __future__ import annotations
 
@@ -64,8 +64,12 @@ class CallBudget:
             now = self._clock()
             con.execute("DELETE FROM calls WHERE ts <= ?", (now - self._horizon,))
             for scope, window, limit in self._limits:
+                # The day budget is a calendar UTC day: a day QuotaExceeded reschedules to 00:05.
+                where, since = (
+                    ("ts >= ?", now - now % 86400) if scope == "day" else ("ts > ?", now - window)
+                )
                 (used,) = con.execute(
-                    "SELECT COALESCE(SUM(weight), 0) FROM calls WHERE ts > ?", (now - window,)
+                    f"SELECT COALESCE(SUM(weight), 0) FROM calls WHERE {where}", (since,)
                 ).fetchone()
                 if used + weight <= limit:
                     continue

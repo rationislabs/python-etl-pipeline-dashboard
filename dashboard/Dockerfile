@@ -10,6 +10,7 @@ RUN uv export --frozen --package weather-dash --no-dev --no-emit-workspace --no-
 COPY dashboard dashboard
 RUN uv pip install --system --no-deps ./dashboard
 ENV LAKEHOUSE=/lakehouse CITIES_FILE=/app/config/cities.yaml PYTHONUNBUFFERED=1
+ENV HOME=/tmp
 EXPOSE 8050
 USER nobody
 CMD ["gunicorn", "-b", "0.0.0.0:8050", "-w", "2", "weather_dash.app:server"]

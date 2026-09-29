@@ -87,3 +87,17 @@ def test_excessive_minute_wait_becomes_quota_error(tmp_path, clock):
     with pytest.raises(QuotaExceeded) as exc:
         b.acquire(6)
     assert exc.value.scope == "minute"
+
+
+def test_day_budget_resets_at_utc_midnight(tmp_path):
+    clock = Clock(t=20_000 * 86400 + 23 * 3600)  # 23:00 UTC
+    limits = (("minute", 60, 10.0), ("day", 86400, 16.0))
+    b = CallBudget(tmp_path / "rl.sqlite", limits=limits, clock=clock, sleep=clock.sleep)
+    b.acquire(8)
+    clock.t += 61
+    b.acquire(8)
+    with pytest.raises(QuotaExceeded) as exc:
+        b.acquire(8)
+    assert exc.value.scope == "day"
+    clock.t = 20_001 * 86400 + 5 * 60  # 00:05 UTC next day, when a day QuotaExceeded reschedules
+    b.acquire(8)

@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime
 import pytest
 from weather_etl.bronze import load_landing
 from weather_etl.landing import write_landing
-from weather_etl.openmeteo import FetchResult
+from weather_etl.openmeteo import HOURLY_VARS, FetchResult
 from weather_etl.paths import table_path
 from weather_etl.silver import build_silver, cities_frame, merge_silver, parse_bronze
 
@@ -101,3 +101,14 @@ def test_watermark_processes_only_new_bronze(spark, lake, cities, make_payload):
 
 def test_no_bronze_means_nothing_to_do(spark, lake, cities):
     assert build_silver(spark, lake, cities, "run-1") == 0
+
+
+def test_trailing_null_hours_are_dropped(spark, lake, cities, make_payload):
+    nulls = {v: [1.0] * 42 + [None] * 6 for v in HOURLY_VARS}
+    nulls["temperature_2m"] = [5.0] * 42 + [None] * 6
+    land(lake, "vienna", make_payload(datetime(2023, 1, 1), 48, **nulls))
+    load_landing(spark, lake)
+    bronze = spark.read.format("delta").load(table_path(lake, "bronze", "weather_raw"))
+    df = parse_bronze(bronze, cities_frame(spark, cities))
+    assert df.count() == 42
+    assert df.filter("ts_utc > timestamp'2023-01-02 17:00:00'").count() == 0

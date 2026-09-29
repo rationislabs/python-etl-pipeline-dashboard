@@ -52,7 +52,11 @@ def get_lakehouse() -> Lakehouse:
 
 @lru_cache(maxsize=1)
 def get_cities() -> pd.DataFrame:
-    return load_cities(Path(os.environ.get("CITIES_FILE", "config/cities.yaml")))
+    """Active cities, mirroring weather_etl.config.active_cities: DEMO=1 keeps demo rows."""
+    cities = load_cities(Path(os.environ.get("CITIES_FILE", "config/cities.yaml")))
+    if os.environ.get("DEMO") == "1":
+        cities = cities[cities["demo"].astype(bool)].reset_index(drop=True)
+    return cities
 
 
 def first_year(env: Mapping[str, str] | None = None) -> int:

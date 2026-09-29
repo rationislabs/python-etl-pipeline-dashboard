@@ -7,7 +7,7 @@ from pathlib import Path
 
 from weather_etl.config import City
 from weather_etl.landing import count_hours, write_landing
-from weather_etl.ops import classify, upsert_ingest_log
+from weather_etl.ops import classify, read_ingest_log, upsert_ingest_log
 
 
 def year_window(year: int, today: date) -> tuple[date, date] | None:
@@ -51,6 +51,19 @@ def ingest_city_year(city: City, year: int, root: Path, client, today: date) -> 
 
 
 def ingest_recent(city: City, root: Path, client, today: date, days: int = 14) -> Path:
+    """Trailing window; after downtime it reaches back to a week before the last fetch.
+
+    The city's current-year ingest_log row doubles as the "fetched through" marker: its
+    fetched_at is bumped on every recent fetch (status and rows are left untouched).
+    """
     start, end = today - timedelta(days=days), today - timedelta(days=1)
+    log = read_ingest_log(root)
+    mine = log[(log["city_id"] == city.id) & (log["year"] == end.year)]
+    if not mine.empty:
+        last = mine["fetched_at"].max().date()
+        start = max(date(end.year, 1, 1), min(start, last - timedelta(days=7)))
     result = client.fetch_hourly(city.lat, city.lon, start, end)
-    return write_landing(root, city.id, end.year, result)
+    path = write_landing(root, city.id, end.year, result)
+    if not mine.empty:
+        upsert_ingest_log(root, [{**mine.iloc[0].to_dict(), "fetched_at": result.fetched_at}])
+    return path

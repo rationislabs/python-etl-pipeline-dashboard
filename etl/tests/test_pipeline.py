@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 import yaml
@@ -115,3 +116,57 @@ def test_previous_year_plan(env, fake_client):
     assert pipeline.previous_year_plan(today=date(2025, 1, 2)) == [
         {"city_id": "vienna", "year": 2024}
     ]
+
+
+@pytest.mark.spark
+def test_vacuum_removes_dead_files(spark, lake):
+    from weather_etl.spark import vacuum
+
+    path = table_path(lake, "gold", "t")
+    for n in (3, 5):
+        spark.range(n).coalesce(1).write.format("delta").mode("overwrite").save(path)
+    files = lambda: {p for p in Path(path).glob("*.parquet")}  # noqa: E731
+    assert len(files()) == 2
+    key = "spark.databricks.delta.retentionDurationCheck.enabled"
+    old = spark.conf.get(key, "true")
+    spark.conf.set(key, "false")
+    try:
+        vacuum(spark, path, retention_hours=0)
+    finally:
+        spark.conf.set(key, old)
+    assert len(files()) == 1
+    assert spark.read.format("delta").load(path).count() == 5
+
+
+@pytest.mark.spark
+def test_refine_demo_tolerates_bronze_of_inactive_city(
+    spark, env, fake_client, tmp_path, monkeypatch
+):
+    cfg = tmp_path / "cities2.yaml"
+    base = {"country": "X", "tz": "UTC", "climate": "temperate"}
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "cities": [
+                    {
+                        "id": "vienna",
+                        "name": "Vienna",
+                        "lat": 48.2,
+                        "lon": 16.4,
+                        "demo": True,
+                        **base,
+                    },
+                    {"id": "sydney", "name": "Sydney", "lat": -33.9, "lon": 151.2, **base},
+                ]
+            }
+        )
+    )
+    monkeypatch.setenv("CITIES_FILE", str(cfg))
+    pipeline.ingest_one("sydney", 2023, today=TODAY, client=fake_client)  # earlier full run
+    monkeypatch.setenv("DEMO", "1")
+    assert pipeline.ingest_recent_all(today=TODAY, client=fake_client) == 1
+    counts = pipeline.refine(today=TODAY, spark=spark)
+    assert counts["silver_merged"] == 8760 + 14 * 24
+    dq = DeltaTable(table_path(env, "ops", "dq_results")).to_pandas()
+    fresh = dq[dq.check_name == "fresh_within_10_days"]
+    assert fresh.passed.all()

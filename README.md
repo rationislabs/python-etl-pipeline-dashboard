@@ -20,6 +20,8 @@ Open-Meteo ──► landing JSON ──► bronze.weather_raw ──► silver.
 | Airflow (no login, local only) | http://localhost:8080 |
 | Spark master UI | http://localhost:8081 |
 
+All ports bind to `127.0.0.1` only, so nothing is reachable from the LAN.
+
 ## Quick start
 
 Requirements: Docker with Compose v2, about 8 GB of free RAM, and [uv](https://docs.astral.sh/uv/).
@@ -41,9 +43,10 @@ The full backfill covers 20 cities × 1980 → today, about 940 city-years, abou
 
 - A local SQLite budget keeps calls under the per-minute, per-hour and per-day limits.
 - A task that hits a limit is **rescheduled**, not failed. The run continues after the quota resets.
+- The daily budget is a calendar UTC day: a task that exhausts it resumes at 00:05 UTC.
 - City-years already complete are never fetched again, so re-triggering is always safe.
 
-`daily_refresh` runs at 06:00 UTC. It starts with a `backfill_started` short-circuit, so it stays idle until a backfill has actually ingested something. Once one has, it re-fetches the last 14 days, and ERA5's preliminary values are overwritten by MERGE. It then completes the previous year and rebuilds gold.
+`daily_refresh` runs at 06:00 UTC. It starts with a `backfill_started` short-circuit, so it stays idle until a backfill has actually ingested something. Once one has, it re-fetches the last 14 days, and ERA5's preliminary values are overwritten by MERGE. After a long downtime the window reaches back to a week before the last fetch (never before 1 January), so gaps are refetched automatically. It then completes the previous year and rebuilds gold.
 
 ## Layers
 
@@ -65,16 +68,18 @@ Data-quality checks are plain PySpark:
 
 ## Configuring cities
 
-Edit `config/cities.yaml`. Each entry needs `id`, `name`, `country`, `lat`, `lon`, an IANA `tz` and a `climate` zone. The config is validated at plan time. The next `inv backfill` fetches only the new cities.
+Edit `config/cities.yaml`. Each entry needs `id`, `name`, `country`, `lat`, `lon`, an IANA `tz` and a `climate` zone. The config is validated at plan time. The next `inv backfill` fetches only the new cities. Restart the dashboard (`docker compose restart dash`) to see them.
 
 ## Testing
 
 ```bash
-uv run inv test            # unit + Spark tests, offline (needs Java 17+)
+uv run inv test            # unit + Spark tests, offline after the first run (needs Java 17+)
 uv run inv test --images   # also builds images and runs the DAG tests inside Airflow
 uv run inv lint
 uv run inv e2e             # real API, isolated stack, 1 city × 2024→now (stop the main stack first)
 ```
+
+The first Spark run downloads the Delta Lake jars via Ivy; after that the tests need no network.
 
 ## Local development
 
@@ -88,6 +93,7 @@ uv run inv e2e             # real API, isolated stack, 1 city × 2024→now (sto
 - The most recent days are preliminary, and ERA5 revises them for several days.
 - The backfill speed is bound by the free API quota, not by Spark.
 - Day-of-year charts place non-leap years on a leap-year axis, so dates after Feb 28 shift by one day.
+- For cities east of UTC, the first local day of `FIRST_YEAR` is incomplete (its early hours fall in the previous UTC year) and is dropped, so that January and that year are also missing from the monthly and annual anomalies and their baselines.
 
 ## Data attribution
 

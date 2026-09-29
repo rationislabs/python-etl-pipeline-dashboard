@@ -40,10 +40,15 @@ def parse_bronze(bronze: DataFrame, cities_df: DataFrame) -> DataFrame:
         F.col("j.hourly.time").alias("time"),
         *[F.col(f"j.hourly.{v}").alias(v) for v in HOURLY_VARS],
     )
-    rows = arrays.select(*meta, F.explode(F.arrays_zip("time", *HOURLY_VARS)).alias("r")).select(
-        *meta,
-        F.to_timestamp("r.time", "yyyy-MM-dd'T'HH:mm").alias("ts_utc"),
-        *[F.col(f"r.{v}").alias(v) for v in HOURLY_VARS],
+    rows = (
+        arrays.select(*meta, F.explode(F.arrays_zip("time", *HOURLY_VARS)).alias("r"))
+        .select(
+            *meta,
+            F.to_timestamp("r.time", "yyyy-MM-dd'T'HH:mm").alias("ts_utc"),
+            *[F.col(f"r.{v}").alias(v) for v in HOURLY_VARS],
+        )
+        # ERA5 lags ~5 days: not-yet-available trailing hours come back all-null
+        .filter(F.col("temperature_2m").isNotNull())
     )
     latest = Window.partitionBy("city_id", "ts_utc").orderBy(F.col("fetched_at").desc())
     rows = rows.withColumn("_rn", F.row_number().over(latest)).filter("_rn = 1").drop("_rn")
