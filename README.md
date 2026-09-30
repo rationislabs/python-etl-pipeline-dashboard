@@ -33,6 +33,14 @@ uv run inv demo      # 3 cities (Singapore, Vienna, Yakutsk), 1991 → today
 
 The demo takes about 15 minutes: about 6 of those are the API's per-minute limit, the rest is Spark. The dashboard fills in when the `refine` task finishes. Before that, every page shows its progress.
 
+Stop the stack with `uv run inv down`. Your data in `./lakehouse` and the Airflow database are kept.
+
+To watch the containers, images, volumes and logs in a terminal UI, run [lazydocker](https://github.com/jesseduffield/lazydocker) (optional):
+
+```bash
+lazydocker
+```
+
 ## Full backfill
 
 ```bash
