@@ -88,6 +88,7 @@ def template(mode: str) -> go.layout.Template:
         zerolinecolor=c["axis"],
         tickfont=dict(color=c["muted"]),
         title=dict(font=dict(color=c["ink2"])),
+        automargin=True,  # long tick labels (Buenos Aires, DQ check names) get room
     )
     return go.layout.Template(
         layout=go.Layout(

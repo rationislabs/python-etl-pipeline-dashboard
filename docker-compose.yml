@@ -43,7 +43,7 @@ services:
     image: weather-base:local
     hostname: spark-master
     command: ["/bin/sh", "-c", "$$SPARK_HOME/bin/spark-class org.apache.spark.deploy.master.Master --host spark-master --port 7077 --webui-port 8081"]
-    ports: ["127.0.0.1:8081:8081"]
+    ports: ["127.0.0.1:${SPARK_UI_PORT:-8081}:8081"]
     volumes: *lakehouse
     mem_limit: 512m
     healthcheck:
@@ -89,7 +89,7 @@ services:
   airflow-apiserver:
     <<: *airflow
     command: ["airflow", "api-server"]
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ["127.0.0.1:${AIRFLOW_PORT:-8080}:8080"]
     mem_limit: 1g
     depends_on:
       <<: *airflow-deps
@@ -125,13 +125,26 @@ services:
       interval: 30s
       retries: 10
 
+  # No DAG defers today; it keeps Airflow's health view complete and deferrable sensors possible.
+  airflow-triggerer:
+    <<: *airflow
+    command: ["airflow", "triggerer"]
+    mem_limit: 512m
+    depends_on:
+      <<: *airflow-deps
+      airflow-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      retries: 10
+
   dash:
     build:
       context: .
       dockerfile: dashboard/Dockerfile
     image: weather-dash:local
     pull_policy: never
-    ports: ["127.0.0.1:8050:8050"]
+    ports: ["127.0.0.1:${DASH_PORT:-8050}:8050"]
     volumes:
       - ${LAKEHOUSE_DIR:-./lakehouse}:/lakehouse:ro
       - ./config:/app/config:ro

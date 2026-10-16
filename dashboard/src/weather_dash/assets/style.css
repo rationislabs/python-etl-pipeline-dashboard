@@ -2,6 +2,15 @@
   --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e;
   --muted: #898781; --grid: #e1e0d9; --axis: #c3c2b7; --accent: #2a78d6;
 }
+/* Dash 4 components (dropdown, slider, inputs) read these. Dash sets them on :root from its JS,
+   after this file loads, so html:root (more specific) is needed to win. */
+html:root {
+  --Dash-Fill-Inverse-Strong: var(--surface); --Dash-Text-Primary: var(--ink);
+  --Dash-Text-Strong: var(--ink); --Dash-Text-Weak: var(--ink2); --Dash-Text-Disabled: var(--muted);
+  --Dash-Stroke-Strong: var(--axis); --Dash-Stroke-Weak: var(--grid);
+  --Dash-Fill-Interactive-Weak: var(--grid); --Dash-Fill-Disabled: var(--grid);
+  --Dash-Fill-Primary-Hover: var(--grid); --Dash-Fill-Primary-Active: var(--axis);
+}
 [data-theme="dark"] {
   --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7;
   --muted: #898781; --grid: #2c2c2a; --axis: #383835; --accent: #3987e5;
@@ -20,7 +29,7 @@ body { margin: 0; background: var(--page); color: var(--ink);
 .theme-toggle label { margin-left: 12px; color: var(--ink2); }
 .filters { display: grid; grid-template-columns: 2fr 3fr; gap: 24px; padding: 16px 0;
            border-bottom: 1px solid var(--grid); }
-.filter span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.filter > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .content h2 { margin: 24px 0 4px; font-size: 18px; }
 .lede { margin: 0 0 16px; color: var(--ink2); max-width: 780px; }
 .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }

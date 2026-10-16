@@ -10,6 +10,7 @@ app = Dash(
     pages_folder="",
     title="Weather Lakehouse",
     suppress_callback_exceptions=True,
+    compress=True,  # gzip: plotly.js alone is 4.8 MB uncompressed
 )
 
 from weather_dash.pages import extremes, overview, pipeline, seasonality, warming  # noqa: E402,F401

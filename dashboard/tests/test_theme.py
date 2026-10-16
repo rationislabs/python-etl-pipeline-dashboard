@@ -47,3 +47,10 @@ def test_template_uses_surface():
 
 def test_rgba():
     assert theme.rgba("#2a78d6", 0.5) == "rgba(42,120,214,0.5)"
+
+
+def test_axis_labels_get_room():
+    from weather_dash.theme import template
+
+    t = template("light").layout
+    assert t.xaxis.automargin and t.yaxis.automargin  # long city names are not cut off

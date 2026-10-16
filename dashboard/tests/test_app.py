@@ -69,3 +69,28 @@ def test_pages_render_data(app_module, gold_lake):
 def test_seasonality_layout_offers_data_years(app_module, gold_lake):
     _, _, seasonality, _, _ = pages()
     assert "2004" in str(seasonality.layout())
+
+
+def test_default_cities_prefer_cities_with_data():
+    import pandas as pd
+    from weather_dash.layout import default_cities
+
+    cities = pd.DataFrame(
+        {
+            "id": ["singapore", "cairo", "vienna", "london", "yakutsk"],
+            "climate": ["tropical", "arid", "temperate", "temperate", "continental"],
+        }
+    )
+    # demo data: Cairo has none, London (not Vienna) is the temperate city with data
+    assert default_cities(cities, {"singapore", "london", "yakutsk"}) == [
+        "singapore",
+        "london",
+        "yakutsk",
+    ]
+    assert default_cities(cities, set()) == ["singapore", "cairo", "vienna", "yakutsk"]
+
+
+def test_assets_are_compressed(app_module):
+    client = app_module.server.test_client()
+    r = client.get("/", headers={"Accept-Encoding": "gzip"})
+    assert r.headers.get("Content-Encoding") == "gzip"  # plotly.js is 4.8 MB uncompressed

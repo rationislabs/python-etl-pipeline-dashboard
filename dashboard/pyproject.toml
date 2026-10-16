@@ -3,7 +3,7 @@ name = "weather-dash"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "dash==4.4.1",
+  "dash[compress]==4.4.1",
   "plotly==7.1.0",
   "pandas>=2.2",
   "numpy>=2.0",

@@ -20,7 +20,9 @@ Open-Meteo ──► landing JSON ──► bronze.weather_raw ──► silver.
 | Airflow (no login, local only) | http://localhost:8080 |
 | Spark master UI | http://localhost:8081 |
 
-All ports bind to `127.0.0.1` only, so nothing is reachable from the LAN.
+All ports bind to `127.0.0.1` only, so nothing is reachable from the LAN. If a port is taken,
+pick another with `AIRFLOW_PORT`, `SPARK_UI_PORT` or `DASH_PORT`, for example
+`AIRFLOW_PORT=8090 uv run inv demo`.
 
 ## Quick start
 

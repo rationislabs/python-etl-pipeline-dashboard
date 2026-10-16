@@ -113,7 +113,9 @@ def demo(c):
     c.run("docker compose up -d --build --wait", env=env)
     _trigger(c, env)
     print(
-        "Airflow http://localhost:8080 · Spark http://localhost:8081 · Dashboard http://localhost:8050"
+        f"Airflow http://localhost:{os.environ.get('AIRFLOW_PORT', '8080')}"
+        f" · Spark http://localhost:{os.environ.get('SPARK_UI_PORT', '8081')}"
+        f" · Dashboard http://localhost:{os.environ.get('DASH_PORT', '8050')}"
     )
 
 

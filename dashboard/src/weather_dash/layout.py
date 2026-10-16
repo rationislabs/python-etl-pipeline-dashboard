@@ -10,8 +10,11 @@ from weather_dash import data
 from weather_dash.theme import CLIMATE_ORDER
 
 
-def default_cities(cities: pd.DataFrame) -> list[str]:
-    """First configured city of each climate zone."""
+def default_cities(cities: pd.DataFrame, with_data: set[str] | None = None) -> list[str]:
+    """First city of each climate zone that has data (a demo has only a few); before any data,
+    the first configured city of each zone."""
+    if with_data:
+        cities = cities[cities["id"].isin(with_data)]
     picks = []
     for zone in CLIMATE_ORDER:
         match = cities[cities["climate"] == zone]
@@ -22,6 +25,8 @@ def default_cities(cities: pd.DataFrame) -> list[str]:
 
 def shell() -> html.Div:
     cities = data.get_cities()
+    trends = data.get_lakehouse().table("gold", "trend_city")
+    with_data = set(trends["city_id"]) if not trends.empty else set()
     first, last = data.first_year(), data.last_complete_year()
     pages = sorted(dash.page_registry.values(), key=lambda p: p["order"])
     return html.Div(
@@ -68,7 +73,7 @@ def shell() -> html.Div:
                             dcc.Dropdown(
                                 id="f-cities",
                                 multi=True,
-                                value=default_cities(cities),
+                                value=default_cities(cities, with_data),
                                 options=[
                                     {"label": f"{r.name} · {r.climate}", "value": r.id}
                                     for r in cities.itertuples()
