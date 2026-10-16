@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "pyspark==4.2.0",
-  "delta-spark==4.4.0",
+  "delta-spark==4.4.1",
   "deltalake[pyarrow]>=1.6",
   "httpx>=0.28",
   "pydantic>=2.13",
