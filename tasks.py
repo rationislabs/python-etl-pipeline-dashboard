@@ -40,6 +40,24 @@ def e2e_env() -> dict[str, str]:
     )
 
 
+def setting(name: str, default: str) -> str:
+    """A compose setting as `docker compose` sees it: the environment, then .env, then default."""
+    if os.environ.get(name):
+        return os.environ[name]
+    env_file = ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key.strip() == name:
+                return value.strip().strip("\"'") or default
+    return default
+
+
+def lakehouse() -> Path:
+    """The bind-mounted lakehouse folder, LAKEHOUSE_DIR as compose resolves it."""
+    return (ROOT / setting("LAKEHOUSE_DIR", "./lakehouse")).resolve()
+
+
 def ensure_lakehouse(path: Path) -> None:
     """Create the bind-mounted lakehouse dir as the host user (with .gitkeep) before
     `docker compose up`, otherwise Docker creates it root-owned on a fresh clone."""
@@ -101,21 +119,21 @@ def _wait_for_run(c, env, dag_id, timeout_s, project=None) -> str:
 @task
 def up(c):
     """Start the full stack (no backfill)."""
-    ensure_lakehouse(ROOT / "lakehouse")
+    ensure_lakehouse(lakehouse())
     c.run("docker compose up -d --build --wait", env=compose_env())
 
 
 @task
 def demo(c):
     """DEMO=1: 3 cities, baseline years to now; triggers the backfill."""
-    ensure_lakehouse(ROOT / "lakehouse")
+    ensure_lakehouse(lakehouse())
     env = compose_env(DEMO="1")
     c.run("docker compose up -d --build --wait", env=env)
     _trigger(c, env)
     print(
-        f"Airflow http://localhost:{os.environ.get('AIRFLOW_PORT', '8080')}"
-        f" · Spark http://localhost:{os.environ.get('SPARK_UI_PORT', '8081')}"
-        f" · Dashboard http://localhost:{os.environ.get('DASH_PORT', '8050')}"
+        f"Airflow http://localhost:{setting('AIRFLOW_PORT', '8088')}"
+        f" · Spark http://localhost:{setting('SPARK_UI_PORT', '8081')}"
+        f" · Dashboard http://localhost:{setting('DASH_PORT', '8050')}"
     )
 
 
@@ -132,10 +150,19 @@ def down(c):
 
 @task
 def reset(c):
-    """Stop the stack and delete ./lakehouse contents and the Airflow database volume."""
+    """Stop the stack and delete the lakehouse (LAKEHOUSE_DIR) and the Airflow database volume."""
+    lake = lakehouse()
+    home, root = Path.home().resolve(), ROOT.resolve()
+    looks_like_a_lakehouse = (lake / ".gitkeep").exists() or (lake / "_state").exists()
+    if (
+        lake in (Path("/"), home, root)
+        or lake in root.parents
+        or (lake.exists() and any(lake.iterdir()) and not looks_like_a_lakehouse)
+    ):
+        raise SystemExit(f"refusing to delete {lake}: LAKEHOUSE_DIR must be the lakehouse folder")
     c.run("docker compose down -v", env=compose_env())
-    shutil.rmtree(ROOT / "lakehouse", ignore_errors=True)
-    ensure_lakehouse(ROOT / "lakehouse")
+    shutil.rmtree(lake, ignore_errors=True)
+    ensure_lakehouse(lake)
 
 
 @task
@@ -149,7 +176,7 @@ def test(c, images=False):
     """Unit + Spark tests; --images also builds images and runs the DAG tests inside Airflow."""
     c.run("uv run pytest")
     if images:
-        ensure_lakehouse(ROOT / "lakehouse")
+        ensure_lakehouse(lakehouse())
         c.run("docker compose build", env=compose_env())
         c.run(
             "docker compose run --rm --no-deps -T airflow-scheduler pytest -q /opt/airflow/tests",
@@ -178,7 +205,12 @@ def e2e(c, timeout=1800):
             assert n > 0, f"gold.{name} is empty"
             print(f"gold.{name}: {n} rows")
         for path in PAGES:
-            assert httpx.get(f"http://localhost:8050{path}", timeout=30).status_code == 200
+            assert (
+                httpx.get(
+                    f"http://localhost:{setting('DASH_PORT', '8050')}{path}", timeout=30
+                ).status_code
+                == 200
+            )
         print("E2E passed")
     finally:
         c.run(f"{_compose(E2E_PROJECT)} down -v", env=env, warn=True)

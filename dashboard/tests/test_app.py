@@ -94,3 +94,15 @@ def test_assets_are_compressed(app_module):
     client = app_module.server.test_client()
     r = client.get("/", headers={"Accept-Encoding": "gzip"})
     assert r.headers.get("Content-Encoding") == "gzip"  # plotly.js is 4.8 MB uncompressed
+
+
+def test_callbacks_survive_values_the_layout_never_offers(app_module, gold_lake):
+    # Dash does not check a dropdown's value against its options: a stale URL, an old
+    # browser tab or a crafted request can send anything.
+    overview, warming, seasonality, extremes, pipeline = pages()
+    assert warming.render("dark", ["atlantis", "vienna"], None) is not None
+    assert warming.render("dark", None, [2000, 2005]) is not None
+    ext, ridge = extremes.render("light", ["atlantis"], None, "atlantis")
+    assert ext is not None and ridge is not None
+    band, heat = seasonality.render("light", "atlantis", None)
+    assert band is not None and heat is not None

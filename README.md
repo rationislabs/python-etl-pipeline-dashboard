@@ -17,12 +17,15 @@ Open-Meteo ──► landing JSON ──► bronze.weather_raw ──► silver.
 | Service | URL |
 |---|---|
 | Dashboard | http://localhost:8050 |
-| Airflow (no login, local only) | http://localhost:8080 |
+| Airflow (no login, local only) | http://localhost:8088 |
 | Spark master UI | http://localhost:8081 |
 
 All ports bind to `127.0.0.1` only, so nothing is reachable from the LAN. If a port is taken,
 pick another with `AIRFLOW_PORT`, `SPARK_UI_PORT` or `DASH_PORT`, for example
 `AIRFLOW_PORT=8090 uv run inv demo`.
+
+The stack is for local development only: Airflow lets everyone in as admin, Spark has no
+authentication, and Postgres uses `airflow`/`airflow`. Do not expose it beyond `127.0.0.1`.
 
 ## Quick start
 

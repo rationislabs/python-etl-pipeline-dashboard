@@ -74,7 +74,7 @@ def test_backfill_end_to_end_offline(spark, env, fake_client):
 
     counts = pipeline.refine(today=TODAY, spark=spark)
     assert counts["bronze_loaded"] == 3
-    assert counts["silver_merged"] == 8760 * 2 + 9 * 24
+    assert counts["silver_merged"] == 8760 * 2 + 9 * 24 + 24  # + Dec 31 before the first year
     assert counts["gold_trend_city"] == 1 and counts["gold_daily_city"] > 700
 
     assert sorted(read_ingest_log(env).status) == ["complete", "complete", "partial"]
@@ -166,7 +166,49 @@ def test_refine_demo_tolerates_bronze_of_inactive_city(
     monkeypatch.setenv("DEMO", "1")
     assert pipeline.ingest_recent_all(today=TODAY, client=fake_client) == 1
     counts = pipeline.refine(today=TODAY, spark=spark)
-    assert counts["silver_merged"] == 8760 + 14 * 24
+    assert counts["silver_merged"] == 8760 + 14 * 24 + 24  # + Dec 31 before the first year
     dq = DeltaTable(table_path(env, "ops", "dq_results")).to_pandas()
     fresh = dq[dq.check_name == "fresh_within_10_days"]
     assert fresh.passed.all()
+
+
+def test_a_resumed_recent_ingest_skips_cities_fetched_today(env, fake_client, monkeypatch):
+    # After a quota reschedule the task starts again from the first city: those already
+    # fetched today must not spend the quota a second time.
+    from weather_etl.ops import upsert_ingest_log
+
+    pipeline.ingest_one("vienna", TODAY.year, today=TODAY, client=fake_client)
+    row = read_ingest_log(env).iloc[0].to_dict()
+    upsert_ingest_log(env, [{**row, "fetched_at": datetime(2024, 1, 10, 6, tzinfo=UTC)}])
+    calls = []
+    real = fake_client.fetch_hourly
+    monkeypatch.setattr(
+        fake_client, "fetch_hourly", lambda *a, **k: (calls.append(a), real(*a, **k))[1]
+    )
+    pipeline.ingest_recent_all(today=TODAY, client=fake_client)
+    assert calls == []
+    pipeline.ingest_recent_all(today=date(2024, 1, 11), client=fake_client)
+    assert len(calls) == 1
+
+
+def test_a_previous_year_fetch_today_does_not_skip_the_recent_window(env, fake_client):
+    # Closing last year in the same daily run must not count as this year's recent fetch.
+    from weather_etl.ops import upsert_ingest_log
+
+    pipeline.ingest_one("vienna", TODAY.year - 1, today=TODAY, client=fake_client)
+    pipeline.ingest_one("vienna", TODAY.year, today=TODAY, client=fake_client)
+    rows = read_ingest_log(env)
+    old = rows[rows["year"] == TODAY.year].iloc[0].to_dict()
+    prev = rows[rows["year"] == TODAY.year - 1].iloc[0].to_dict()
+    upsert_ingest_log(
+        env,
+        [
+            {**old, "fetched_at": datetime(2024, 1, 9, 6, tzinfo=UTC)},
+            {**prev, "fetched_at": datetime(2024, 1, 10, 6, tzinfo=UTC)},
+        ],
+    )
+    calls = []
+    real = fake_client.fetch_hourly
+    fake_client.fetch_hourly = lambda *a, **k: (calls.append(a), real(*a, **k))[1]
+    pipeline.ingest_recent_all(today=TODAY, client=fake_client)
+    assert len(calls) == 1

@@ -47,12 +47,13 @@ def test_duplicate_keys_fail_hard(spark, lake, cities, make_payload):
     assert not res["unique_city_ts"].passed and res["unique_city_ts"].observed == 3
 
 
-def test_out_of_range_temperature_fails_hard(spark, lake, cities, make_payload):
+def test_out_of_range_temperature_is_flagged_soft(spark, lake, cities, make_payload):
+    # Bad rows are quarantined (build_silver), so the check reports instead of blocking.
     df = batch_from(
         spark, lake, cities, "vienna", make_payload(datetime(2023, 1, 1), 24, temp=lambda ts: 70.0)
     )
     res = by_name(check_silver_batch(df, {"vienna"}))
-    assert not res["range_temperature_2m"].passed and res["range_temperature_2m"].severity == "hard"
+    assert not res["range_temperature_2m"].passed and res["range_temperature_2m"].severity == "soft"
 
 
 def test_unknown_city_fails_hard(spark, lake, cities, make_payload):
@@ -74,25 +75,35 @@ def test_empty_batch_returns_no_results(spark, lake, cities, make_payload):
     assert check_silver_batch(df.limit(0), {"vienna"}) == []
 
 
-def test_hard_failure_blocks_silver_and_is_recorded(spark, lake, cities, make_payload):
+def test_out_of_range_rows_are_quarantined_and_silver_moves_on(spark, lake, cities, make_payload):
+    # One impossible hour used to block silver for every city until someone stepped in.
+    hot = make_payload(datetime(2023, 1, 1), 24, temp=lambda ts: 70.0 if ts.hour == 5 else 10.0)
+    write_landing(
+        lake, "vienna", 2023, FetchResult("fake://u", hot, datetime(2026, 1, 1, tzinfo=UTC), 1.0)
+    )
+    load_landing(spark, lake)
+    assert build_silver(spark, lake, cities, "run-1") == 23
+    rejects = DeltaTable(table_path(lake, "silver", "weather_rejects")).to_pandas()
+    assert len(rejects) == 1 and rejects.iloc[0]["reason"] == "temperature_2m out of range"
+    assert build_silver(spark, lake, cities, "run-2") == 0  # the watermark moved on
+    dq = DeltaTable(table_path(lake, "ops", "dq_results")).to_pandas()
+    flagged = dq[(dq.run_id == "run-1") & (~dq.passed)]
+    assert set(flagged.check_name) == {"range_temperature_2m"}
+
+
+def test_a_hard_failure_still_blocks_silver(spark, lake, cities, make_payload):
     write_landing(
         lake,
-        "vienna",
+        "atlantis",
         2023,
         FetchResult(
-            "fake://u",
-            make_payload(datetime(2023, 1, 1), 24, temp=lambda ts: 70.0),
-            datetime(2026, 1, 1, tzinfo=UTC),
-            1.0,
+            "fake://u", make_payload(datetime(2023, 1, 1), 4), datetime(2026, 1, 1, tzinfo=UTC), 1.0
         ),
     )
     load_landing(spark, lake)
-    with pytest.raises(DQError, match="range_temperature_2m"):
+    with pytest.raises(DQError, match="city_in_config"):
         build_silver(spark, lake, cities, "run-bad")
     assert not silver_exists(spark, lake)
-    dq = DeltaTable(table_path(lake, "ops", "dq_results")).to_pandas()
-    failed = dq[(dq.run_id == "run-bad") & (~dq.passed)]
-    assert "range_temperature_2m" in set(failed.check_name)
 
 
 def test_silver_table_checks(spark, lake, cities, make_payload):
@@ -141,3 +152,21 @@ def test_write_results_appends(lake):
         "r1",
         "r2",
     ]
+
+
+def test_complete_years_ignores_hours_before_the_first_year(spark, lake, cities, make_payload):
+    write_landing(
+        lake,
+        "vienna",
+        2023,
+        FetchResult(
+            "fake://u",
+            make_payload(datetime(2022, 12, 31), 24 + 8760),
+            datetime(2026, 1, 1, tzinfo=UTC),
+            1.0,
+        ),
+    )
+    load_landing(spark, lake)
+    build_silver(spark, lake, cities, "run-1")
+    res = by_name(check_silver_table(spark, lake, date(2024, 1, 2), {"vienna"}, first_year=2023))
+    assert res["complete_years"].passed, res["complete_years"]

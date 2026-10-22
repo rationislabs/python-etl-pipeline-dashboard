@@ -11,9 +11,12 @@ from weather_etl.ops import classify, read_ingest_log, upsert_ingest_log
 
 
 def year_window(year: int, today: date) -> tuple[date, date] | None:
-    start = date(year, 1, 1)
-    end = min(date(year, 12, 31), today - timedelta(days=1))
-    return (start, end) if end >= start else None
+    """Dec 31 of the year before through Dec 31 (or yesterday). Fetches are in UTC; the extra
+    day holds the start of local Jan 1 for cities east of UTC, which the first configured
+    year would otherwise miss (no earlier year fetched to supply it)."""
+    if today <= date(year, 1, 1):
+        return None
+    return date(year - 1, 12, 31), min(date(year, 12, 31), today - timedelta(days=1))
 
 
 def plan_backfill(
@@ -38,7 +41,7 @@ def ingest_city_year(city: City, year: int, root: Path, client, today: date) -> 
         raise ValueError(f"nothing to fetch for {year} on {today}")
     result = client.fetch_hourly(city.lat, city.lon, *window)
     write_landing(root, city.id, year, result)
-    hours = count_hours(result.payload)
+    hours = count_hours(result.payload, year)
     row = {
         "city_id": city.id,
         "year": year,

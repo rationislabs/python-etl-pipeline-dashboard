@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from pyspark.sql import DataFrame, SparkSession
@@ -163,10 +164,20 @@ def distribution_decade(daily: DataFrame) -> DataFrame:
 
 
 def build_gold(
-    spark: SparkSession, root: Path, baseline_start: int, baseline_end: int
+    spark: SparkSession,
+    root: Path,
+    baseline_start: int,
+    baseline_end: int,
+    check: Callable[[dict[str, int]], None] | None = None,
+    first_year: int | None = None,
 ) -> dict[str, int]:
+    """Rebuild every gold table. `check` sees the row counts first and may raise: nothing is
+    overwritten unless it passes, so a bad run never replaces the dashboard's data."""
     silver = spark.read.format("delta").load(table_path(root, "silver", "weather_hourly"))
-    daily = daily_city(silver).cache()
+    daily = daily_city(silver)
+    if first_year is not None:  # silver holds Dec 31 before it: local Jan 1 east of UTC
+        daily = daily.filter(F.col("year") >= first_year)
+    daily = daily.cache()
     annual = anomaly_annual(daily, baseline_start, baseline_end).cache()
     frames = {
         "daily_city": daily,
@@ -177,18 +188,18 @@ def build_gold(
         "extremes_annual": extremes_annual(daily, baseline_start, baseline_end),
         "distribution_decade": distribution_decade(daily),
     }
-    counts: dict[str, int] = {}
     try:
+        counts = {name: df.count() for name, df in frames.items()}
+        if check is not None:
+            check(counts)
         for name, df in frames.items():
-            path = table_path(root, "gold", name)
             (
                 df.coalesce(1)
                 .write.format("delta")
                 .mode("overwrite")
                 .option("overwriteSchema", "true")
-                .save(path)
+                .save(table_path(root, "gold", name))
             )
-            counts[name] = spark.read.format("delta").load(path).count()
     finally:
         annual.unpersist()
         daily.unpersist()

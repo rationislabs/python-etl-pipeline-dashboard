@@ -1,6 +1,7 @@
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from deltalake import DeltaTable
 from weather_etl.bronze import load_landing
 from weather_etl.gold import (
     GOLD_TABLES,
@@ -193,3 +194,54 @@ def test_build_gold_from_silver(spark, lake, cities, make_payload):
     assert all(n > 0 for n in counts.values()), counts
     assert counts["trend_city"] == 1
     assert counts["anomaly_annual"] == 2
+
+
+def test_gold_is_checked_before_anything_is_overwritten(spark, lake, cities, make_payload):
+    # Only 20 local hours: no complete day, so daily_city would be empty. The check must
+    # stop the run before an empty table replaces the dashboard's data.
+    write_landing(
+        lake,
+        "vienna",
+        2023,
+        FetchResult(
+            "fake://u",
+            make_payload(datetime(2023, 1, 1), 20),
+            datetime(2026, 1, 1, tzinfo=UTC),
+            1.0,
+        ),
+    )
+    load_landing(spark, lake)
+    build_silver(spark, lake, cities, "run-1")
+    seen = {}
+
+    def check(counts):
+        seen.update(counts)
+        raise RuntimeError("daily_city is empty")
+
+    with pytest.raises(RuntimeError, match="daily_city is empty"):
+        build_gold(spark, lake, 2023, 2023, check=check)
+    assert seen["daily_city"] == 0
+    assert not (lake / "gold").exists()
+
+
+def test_hours_from_before_the_first_year_stay_out_of_gold(spark, lake, cities, make_payload):
+    # Every fetch starts on Dec 31 of the year before (local Jan 1 east of UTC): for the
+    # first year that day must not become a decade or a year of its own.
+    write_landing(
+        lake,
+        "vienna",
+        1990,
+        FetchResult(
+            "fake://u",
+            make_payload(datetime(1989, 12, 31), 48),
+            datetime(2026, 1, 1, tzinfo=UTC),
+            1.0,
+        ),
+    )
+    load_landing(spark, lake)
+    build_silver(spark, lake, cities, "run-1")
+    build_gold(spark, lake, 1990, 1990, first_year=1990)
+    daily = DeltaTable(str(lake / "gold" / "daily_city")).to_pandas()
+    assert daily["year"].min() == 1990
+    decades = DeltaTable(str(lake / "gold" / "distribution_decade")).to_pandas()
+    assert set(decades["decade"]) == {1990}

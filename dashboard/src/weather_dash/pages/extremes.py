@@ -35,6 +35,7 @@ def layout(**_):
 
 def render(theme, city_ids, years, ridge_city):
     lake, cities = data.get_lakehouse(), data.get_cities()
+    city_ids, years = data.selection(city_ids, years, cities)
     msg = data.empty_message(lake, cities)
     ext = lake.table("gold", "extremes_annual")
     fig = (
@@ -44,7 +45,7 @@ def render(theme, city_ids, years, ridge_city):
             ext,
             cities,
             city_ids,
-            tuple(years),
+            years,
             theme,
             message="No complete years for this selection",
         )

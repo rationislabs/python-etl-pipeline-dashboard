@@ -112,3 +112,12 @@ def test_trailing_null_hours_are_dropped(spark, lake, cities, make_payload):
     df = parse_bronze(bronze, cities_frame(spark, cities))
     assert df.count() == 42
     assert df.filter("ts_utc > timestamp'2023-01-02 17:00:00'").count() == 0
+
+
+def test_a_variable_missing_from_the_payload_keeps_its_hours(spark, lake, cities, make_payload):
+    # arrays_zip is null when any array is: the whole payload's hours vanished unnoticed.
+    land(lake, "vienna", make_payload(datetime(2023, 1, 1), 24, relative_humidity_2m=None))
+    load_landing(spark, lake)
+    assert build_silver(spark, lake, cities, "run-1") == 24
+    df = spark.read.format("delta").load(table_path(lake, "silver", "weather_hourly"))
+    assert df.filter("relative_humidity_2m IS NULL").count() == 24

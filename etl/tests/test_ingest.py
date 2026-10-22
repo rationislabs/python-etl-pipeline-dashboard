@@ -30,9 +30,17 @@ def test_classify():
 
 
 def test_year_window():
-    assert year_window(2023, TODAY) == (date(2023, 1, 1), date(2023, 12, 31))
-    assert year_window(2026, TODAY) == (date(2026, 1, 1), date(2026, 9, 26))
+    # From Dec 31 of the year before: a city east of UTC starts its local Jan 1 there.
+    assert year_window(2023, TODAY) == (date(2022, 12, 31), date(2023, 12, 31))
+    assert year_window(2026, TODAY) == (date(2025, 12, 31), date(2026, 9, 26))
     assert year_window(2026, date(2026, 1, 1)) is None
+
+
+def test_hours_are_counted_within_the_year_only():
+    payload = json.dumps(
+        {"hourly": {"time": ["2022-12-31T23:00", "2023-01-01T00:00"], "temperature_2m": [1.0, 2.0]}}
+    )
+    assert count_hours(payload, 2023) == 1
 
 
 def test_plan_backfill_skips_done_and_empty_current_year(cities):
@@ -77,7 +85,7 @@ def test_write_landing_is_single_line_json(lake, make_payload):
 def test_ingest_full_past_year_is_complete(lake, cities, fake_client):
     row = ingest_city_year(cities[0], 2023, lake, fake_client, TODAY)
     assert (row["status"], row["rows"]) == ("complete", 8760)
-    assert fake_client.calls == [(48.21, 16.37, date(2023, 1, 1), date(2023, 12, 31))]
+    assert fake_client.calls == [(48.21, 16.37, date(2022, 12, 31), date(2023, 12, 31))]
     assert completed(lake) == {("vienna", 2023)}
     assert len(list(landing_dir(lake).rglob("*.json"))) == 1
 

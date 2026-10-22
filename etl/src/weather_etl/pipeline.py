@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -46,9 +47,8 @@ def ingest_one(city_id: str, year: int, today: date | None = None, client=None) 
     city = next((c for c in cities if c.id == city_id), None)
     if city is None:
         raise ValueError(f"unknown or inactive city_id {city_id!r}")
-    row = ingest_city_year(
-        city, year, settings.lakehouse, client or _client(settings), today or today_utc()
-    )
+    with contextlib.nullcontext(client) if client else _client(settings) as c:
+        row = ingest_city_year(city, year, settings.lakehouse, c, today or today_utc())
     return {**row, "fetched_at": row["fetched_at"].isoformat()}
 
 
@@ -59,10 +59,23 @@ def backfill_started() -> bool:
 
 
 def ingest_recent_all(today: date | None = None, client=None, days: int = 14) -> int:
+    """Every city's trailing window. A city already fetched today is skipped: after a quota
+    reschedule the task starts from the first city again."""
     settings, cities = _context()
-    client = client or _client(settings)
-    for city in cities:
-        ingest_recent(city, settings.lakehouse, client, today or today_utc(), days)
+    today = today or today_utc()
+    log = read_ingest_log(settings.lakehouse)
+    # The row ingest_recent itself bumps: the year of yesterday. A fetch of another year
+    # today (closing last year, a backfill) does not cover the trailing window.
+    year = (today - timedelta(days=1)).year
+    done = (
+        set(log.loc[(log["fetched_at"].dt.date == today) & (log["year"] == year), "city_id"])
+        if not log.empty
+        else set()
+    )
+    with contextlib.nullcontext(client) if client else _client(settings) as c:
+        for city in cities:
+            if city.id not in done:
+                ingest_recent(city, settings.lakehouse, c, today, days)
     return len(cities)
 
 
@@ -87,13 +100,27 @@ def refine(today: date | None = None, spark: SparkSession | None = None) -> dict
         counts["silver_merged"] = build_silver(spark, root, configured, run_id)
         if silver_exists(spark, root):
             write_results(
-                root, run_id, check_silver_table(spark, root, today, {c.id for c in cities})
+                root,
+                run_id,
+                check_silver_table(
+                    spark, root, today, {c.id for c in cities}, first_year=settings.first_year
+                ),
             )
-            gold = build_gold(spark, root, settings.baseline_start, settings.baseline_end)
+
+            def check(gold_counts: dict[str, int]) -> None:
+                results = check_gold(gold_counts)
+                write_results(root, run_id, results)
+                raise_on_hard_failures(results)  # before any gold table is overwritten
+
+            gold = build_gold(
+                spark,
+                root,
+                settings.baseline_start,
+                settings.baseline_end,
+                check=check,
+                first_year=settings.first_year,
+            )
             counts.update({f"gold_{name}": n for name, n in gold.items()})
-            gold_results = check_gold(gold)
-            write_results(root, run_id, gold_results)
-            raise_on_hard_failures(gold_results)
             write_pipeline_stats(spark, root)
             for layer, name in [SILVER, *(("gold", n) for n in GOLD_TABLES)]:
                 vacuum(spark, table_path(root, layer, name))

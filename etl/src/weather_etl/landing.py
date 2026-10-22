@@ -33,6 +33,11 @@ def write_landing(root: Path, city_id: str, year: int, result: FetchResult) -> P
     return final
 
 
-def count_hours(payload: str) -> int:
-    temps = json.loads(payload)["hourly"]["temperature_2m"]
-    return sum(t is not None for t in temps)
+def count_hours(payload: str, year: int | None = None) -> int:
+    """Hours with a value; with `year`, only that year's (a window starts on Dec 31 before)."""
+    hourly = json.loads(payload)["hourly"]
+    prefix = f"{year}-" if year is not None else ""
+    return sum(
+        t is not None and ts.startswith(prefix)
+        for ts, t in zip(hourly["time"], hourly["temperature_2m"], strict=True)
+    )

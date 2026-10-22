@@ -10,11 +10,12 @@ from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
 from weather_etl.config import City
-from weather_etl.dq import check_silver_batch, raise_on_hard_failures, write_results
+from weather_etl.dq import check_silver_batch, raise_on_hard_failures, split_valid, write_results
 from weather_etl.openmeteo import HOURLY_VARS
 from weather_etl.paths import table_path
 
 SILVER = ("silver", "weather_hourly")
+REJECTS = ("silver", "weather_rejects")  # rows outside a physical range, with the reason
 
 HOURLY_SCHEMA = T.StructType(
     [
@@ -38,7 +39,16 @@ def parse_bronze(bronze: DataFrame, cities_df: DataFrame) -> DataFrame:
     arrays = bronze.select(*meta, F.from_json("payload", HOURLY_SCHEMA).alias("j")).select(
         *meta,
         F.col("j.hourly.time").alias("time"),
-        *[F.col(f"j.hourly.{v}").alias(v) for v in HOURLY_VARS],
+        # A variable missing from the payload becomes nulls, not a null array: arrays_zip of
+        # a null array is null, and every hour of the payload would vanish unnoticed. The
+        # null-share check then flags it.
+        *[
+            F.coalesce(
+                F.col(f"j.hourly.{v}"),
+                F.array_repeat(F.lit(None).cast("double"), F.size("j.hourly.time")),
+            ).alias(v)
+            for v in HOURLY_VARS
+        ],
     )
     rows = (
         arrays.select(*meta, F.explode(F.arrays_zip("time", *HOURLY_VARS)).alias("r"))
@@ -76,19 +86,27 @@ def pending_bronze(spark: SparkSession, root: Path) -> DataFrame | None:
         return None
     bronze = spark.read.format("delta").load(bronze_path)
     if silver_exists(spark, root):
-        watermark = (
+        # Read now (the merge below changes silver) and as epoch microseconds: collected as a
+        # timestamp it is a naive local datetime, an hour off in the repeated hour when
+        # daylight saving time ends.
+        mark = (
             spark.read.format("delta")
             .load(table_path(root, *SILVER))
-            .agg(F.max("bronze_loaded_at"))
+            .agg(F.max(F.unix_micros("bronze_loaded_at")))
             .first()[0]
         )
-        if watermark is not None:
-            bronze = bronze.filter(F.col("loaded_at") > F.lit(watermark))
+        if mark is not None:
+            # The column bare, so Delta can skip files by their loaded_at statistics.
+            bronze = bronze.filter(F.col("loaded_at") > F.timestamp_micros(F.lit(mark)))
     return bronze
 
 
 def merge_silver(spark: SparkSession, root: Path, batch: DataFrame) -> None:
-    path = table_path(root, *SILVER)
+    _merge(spark, table_path(root, *SILVER), batch)
+
+
+def _merge(spark: SparkSession, path: str, batch: DataFrame) -> None:
+    """Upsert on (city_id, ts_utc): a re-run or a re-fetch never duplicates a row."""
     if not DeltaTable.isDeltaTable(spark, path):
         batch.write.format("delta").partitionBy("city_id").save(path)
         return
@@ -113,7 +131,10 @@ def build_silver(spark: SparkSession, root: Path, cities: list[City], run_id: st
             return 0
         write_results(root, run_id, results)
         raise_on_hard_failures(results)
-        merge_silver(spark, root, batch)
-        return batch.count()
+        valid, rejects = split_valid(batch)
+        if not rejects.isEmpty():
+            _merge(spark, table_path(root, *REJECTS), rejects.withColumn("run_id", F.lit(run_id)))
+        merge_silver(spark, root, valid)
+        return valid.count()
     finally:
         batch.unpersist()

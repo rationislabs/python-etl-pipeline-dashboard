@@ -16,7 +16,7 @@ x-airflow: &airflow
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
-    AIRFLOW__API_AUTH__JWT_SECRET: local-dev-only-jwt-secret
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-local-dev-only-jwt-secret}
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
     AIRFLOW__CORE__LOAD_EXAMPLES: "False"
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
@@ -63,7 +63,7 @@ services:
   spark-worker-2: *worker
 
   postgres:
-    image: postgres:17
+    image: postgres:17@sha256:b8faeff7712663c2773a190181e1246e37e364b887611c04658c28b44e2408fe
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -89,7 +89,7 @@ services:
   airflow-apiserver:
     <<: *airflow
     command: ["airflow", "api-server"]
-    ports: ["127.0.0.1:${AIRFLOW_PORT:-8080}:8080"]
+    ports: ["127.0.0.1:${AIRFLOW_PORT:-8088}:8080"]
     mem_limit: 1g
     depends_on:
       <<: *airflow-deps

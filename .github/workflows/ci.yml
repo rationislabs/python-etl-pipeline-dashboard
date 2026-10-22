@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
@@ -23,16 +25,25 @@ jobs:
       - run: uv run pytest --cov=weather_etl --cov=weather_dash --cov-report=term-missing
       - run: |
           uv export --frozen --no-emit-project --no-emit-workspace -o "$RUNNER_TEMP/requirements.txt"
-          uvx pip-audit --disable-pip -r "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 --disable-pip -r "$RUNNER_TEMP/requirements.txt"
 
   images:
     runs-on: ubuntu-latest
     needs: test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - run: docker compose build
         env:
           LOCAL_UID: "1001"
       - run: docker compose run --rm --no-deps -T airflow-scheduler pytest -q /opt/airflow/tests
+        env:
+          LOCAL_UID: "1001"
+      # Airflow comes from its constraints file, not uv.lock: audit what the image holds.
+      - run: |
+          docker compose run --rm --no-deps -T airflow-scheduler pip list --format=freeze > "$RUNNER_TEMP/airflow.txt"
+          uvx pip-audit==2.10.1 --disable-pip --no-deps -r "$RUNNER_TEMP/airflow.txt"
         env:
           LOCAL_UID: "1001"

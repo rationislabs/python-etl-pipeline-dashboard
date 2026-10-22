@@ -91,3 +91,18 @@ def empty_message(lake: Lakehouse, cities: pd.DataFrame) -> str:
         return "No data yet. Run `inv demo`, or trigger backfill_era5 in Airflow."
     pct = backfill_progress(log, len(cities), first_year(), last_complete_year())
     return f"Backfill in progress: {pct:.0f}% complete"
+
+
+ALL_YEARS = (0, 9999)
+
+
+def selection(city_ids, years, cities) -> tuple[list[str], tuple[int, int]]:
+    """The cities and year range a callback was sent, made safe: Dash does not check a value
+    against the options it offered, so unknown ids are dropped and a missing range is all."""
+    known = set(cities["id"])
+    ids = [c for c in (city_ids or []) if c in known]
+    try:
+        lo, hi = (int(y) for y in years)
+    except (TypeError, ValueError):
+        lo, hi = ALL_YEARS
+    return ids, (lo, hi)

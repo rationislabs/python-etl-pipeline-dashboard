@@ -20,6 +20,7 @@ def layout(**_):
 
 def render(theme, city_ids, years):
     lake, cities = data.get_lakehouse(), data.get_cities()
+    city_ids, years = data.selection(city_ids, years, cities)
     annual = lake.table("gold", "anomaly_annual")
     if annual.empty:
         return figures.empty_figure(data.empty_message(lake, cities), theme)
@@ -28,7 +29,7 @@ def render(theme, city_ids, years):
         lake.table("gold", "trend_city"),
         cities,
         city_ids,
-        tuple(years),
+        years,
         theme,
         data.baseline_label(),
         message="No complete years for this selection",

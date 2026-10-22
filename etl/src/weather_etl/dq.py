@@ -62,6 +62,23 @@ def _out_of_range(col: str, lo: float, hi: float):
     return F.sum(F.coalesce(cond.cast("int"), F.lit(0)))
 
 
+def _bad(col: str, lo: float, hi: float):
+    """True where col is set and outside [lo, hi]; a null is the null-share check's business."""
+    out = F.col(col) < lo if hi == math.inf else (F.col(col) < lo) | (F.col(col) > hi)
+    return F.coalesce(out, F.lit(False))
+
+
+def split_valid(df: DataFrame) -> tuple[DataFrame, DataFrame]:
+    """(rows inside every physical range, the rest with a `reason`): one impossible hour must
+    not keep a whole batch, and every later one, out of silver."""
+    reason = F.concat_ws(
+        ", ",
+        *[F.when(_bad(v, lo, hi), F.lit(f"{v} out of range")) for v, (lo, hi) in RANGES.items()],
+    )
+    tagged = df.withColumn("reason", reason)
+    return tagged.filter("reason = ''").drop("reason"), tagged.filter("reason != ''")
+
+
 def check_silver_batch(df: DataFrame, city_ids: set[str]) -> list[CheckResult]:
     total = df.count()
     if total == 0:
@@ -83,9 +100,9 @@ def check_silver_batch(df: DataFrame, city_ids: set[str]) -> list[CheckResult]:
             t, "city_in_config", "hard", r["unknown_city"] == 0, float(r["unknown_city"]), 0.0
         ),
     ]
-    for v in RANGES:
+    for v in RANGES:  # soft: build_silver quarantines these rows (split_valid)
         n = r[f"range_{v}"]
-        results.append(CheckResult(t, f"range_{v}", "hard", n == 0, float(n), 0.0))
+        results.append(CheckResult(t, f"range_{v}", "soft", n == 0, float(n), 0.0))
     for v in HOURLY_VARS:
         share = r[f"null_{v}"] / total
         results.append(
@@ -95,11 +112,14 @@ def check_silver_batch(df: DataFrame, city_ids: set[str]) -> list[CheckResult]:
 
 
 def check_silver_table(
-    spark: SparkSession, root: Path, today: date, city_ids: set[str]
+    spark: SparkSession, root: Path, today: date, city_ids: set[str], first_year: int | None = None
 ) -> list[CheckResult]:
     df = spark.read.format("delta").load(table_path(root, "silver", "weather_hourly"))
     year = F.year("ts_utc")
-    per_year = df.filter(year < today.year).groupBy("city_id", year.alias("year")).count()
+    done = df.filter(year < today.year)
+    if first_year is not None:  # the Dec 31 fetched before the first year is not a year
+        done = done.filter(year >= first_year)
+    per_year = done.groupBy("city_id", year.alias("year")).count()
     leap = (F.col("year") % 4 == 0) & ((F.col("year") % 100 != 0) | (F.col("year") % 400 == 0))
     expected = F.when(leap, 8784).otherwise(8760)
     incomplete = per_year.filter(F.col("count") != expected).count()

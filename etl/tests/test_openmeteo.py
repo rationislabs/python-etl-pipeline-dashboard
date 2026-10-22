@@ -132,3 +132,26 @@ def test_budget_charged_per_attempt(sleeps):
     ]
     ArchiveClient(budget=budget, sleep=sleeps.append).fetch_hourly(48.21, 16.37, D1, D2)
     assert budget.weights == [pytest.approx(1.2), pytest.approx(1.2)]
+
+
+@respx.mock
+def test_a_minutely_limit_that_outlasts_the_retries_is_a_quota(client, sleeps):
+    # Airflow reschedules a quota (minutes later); a plain error would spend its retries.
+    route().mock(return_value=limit("Minutely API request limit exceeded."))
+    with pytest.raises(QuotaExceeded) as exc:
+        client.fetch_hourly(48.21, 16.37, D1, D2)
+    assert exc.value.scope == "minute"
+
+
+@respx.mock
+def test_a_429_with_an_unknown_reason_is_a_minute_quota(client, sleeps):
+    route().mock(return_value=limit("Too many requests"))
+    with pytest.raises(QuotaExceeded) as exc:
+        client.fetch_hourly(48.21, 16.37, D1, D2)
+    assert exc.value.scope == "minute"
+
+
+def test_the_client_closes_the_http_client_it_made():
+    with ArchiveClient() as c:
+        http = c._http
+    assert http.is_closed

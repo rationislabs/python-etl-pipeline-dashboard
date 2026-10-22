@@ -75,3 +75,54 @@ def test_latest_run_state_returns_none_without_json():
 
 def test_latest_run_state_returns_none_for_empty_list():
     assert tasks.latest_run_state("[]") is None
+
+
+def test_settings_come_from_the_environment_then_dotenv(tmp_path, monkeypatch):
+    monkeypatch.setattr(tasks, "ROOT", tmp_path)
+    monkeypatch.delenv("DASH_PORT", raising=False)
+    assert tasks.setting("DASH_PORT", "8050") == "8050"
+    (tmp_path / ".env").write_text("# comment\nDASH_PORT=8060\n")
+    assert tasks.setting("DASH_PORT", "8050") == "8060"
+    monkeypatch.setenv("DASH_PORT", "8070")
+    assert tasks.setting("DASH_PORT", "8050") == "8070"
+
+
+def test_reset_empties_the_configured_lakehouse(tmp_path, monkeypatch):
+    from invoke import MockContext, Result
+
+    monkeypatch.setattr(tasks, "ROOT", tmp_path)
+    monkeypatch.delenv("LAKEHOUSE_DIR", raising=False)
+    (tmp_path / ".env").write_text("LAKEHOUSE_DIR=./data/lh\n")
+    (tmp_path / "data" / "lh").mkdir(parents=True)
+    (tmp_path / "data" / "lh" / ".gitkeep").write_text("")  # ensure_lakehouse made it
+    (tmp_path / "data" / "lh" / "old.parquet").write_text("x")
+    (tmp_path / "lakehouse").mkdir()
+    (tmp_path / "lakehouse" / "keep").write_text("x")
+    tasks.reset(MockContext(run=Result(), repeat=True))
+    assert not (tmp_path / "data" / "lh" / "old.parquet").exists()
+    assert (tmp_path / "data" / "lh" / ".gitkeep").exists()
+    assert (tmp_path / "lakehouse" / "keep").exists()
+
+
+def test_reset_refuses_a_lakehouse_that_is_not_a_data_dir(tmp_path, monkeypatch):
+    import pytest
+    from invoke import MockContext, Result
+
+    monkeypatch.setattr(tasks, "ROOT", tmp_path)
+    for bad in ("/", ".", "..", str(Path.home())):
+        monkeypatch.setenv("LAKEHOUSE_DIR", bad)
+        with pytest.raises(SystemExit):
+            tasks.reset(MockContext(run=Result(), repeat=True))
+
+
+def test_reset_refuses_a_folder_that_is_not_a_lakehouse(tmp_path, monkeypatch):
+    import pytest
+    from invoke import MockContext, Result
+
+    monkeypatch.setattr(tasks, "ROOT", tmp_path)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "thesis.tex").write_text("years of work")
+    monkeypatch.setenv("LAKEHOUSE_DIR", "./docs")
+    with pytest.raises(SystemExit):
+        tasks.reset(MockContext(run=Result(), repeat=True))
+    assert (tmp_path / "docs" / "thesis.tex").exists()

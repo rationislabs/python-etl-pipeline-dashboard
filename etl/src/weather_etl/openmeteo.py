@@ -74,11 +74,22 @@ class ArchiveClient:
         backoff_s: float = 20.0,
         sleep: Callable[[float], None] = time.sleep,
     ):
+        self._owns_http = http is None
         self._http = http or httpx.Client(timeout=120)
         self._budget = budget
         self._max_attempts = max_attempts
         self._backoff_s = backoff_s
         self._sleep = sleep
+
+    def close(self) -> None:
+        if self._owns_http:
+            self._http.close()
+
+    def __enter__(self) -> ArchiveClient:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
 
     def fetch_hourly(self, lat: float, lon: float, start: date, end: date) -> FetchResult:
         weight = call_weight(len(HOURLY_VARS), start, end)
@@ -110,6 +121,10 @@ class ArchiveClient:
                         raise QuotaExceeded("day", reason)
                     if "hourly" in low:
                         raise QuotaExceeded("hour", reason)
+                    if attempt == self._max_attempts:
+                        # The minute limit (or an unnamed one) outlasted the backoff:
+                        # a quota Airflow reschedules, not an error that spends retries.
+                        raise QuotaExceeded("minute", reason)
                 elif resp.status_code < 500:
                     raise OpenMeteoError(f"HTTP {resp.status_code}: {reason}")
             if attempt < self._max_attempts:
