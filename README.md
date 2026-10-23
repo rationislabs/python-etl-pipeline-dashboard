@@ -14,6 +14,14 @@ Open-Meteo ──► landing JSON ──► bronze.weather_raw ──► silver.
                                                        DQ gate ──► ops.dq_results
 ```
 
+| Overview | Warming |
+|---|---|
+| ![Overview: the latest year's anomaly for each city on a map](docs/screenshots/overview.png) | ![Warming: annual anomalies with trends, and warming stripes](docs/screenshots/warming.png) |
+
+| Extremes | Airflow |
+|---|---|
+| ![Extremes: hot days, cold nights and heavy rain per year, and the distribution by decade](docs/screenshots/extremes.png) | ![The daily_refresh DAG in Airflow](docs/screenshots/airflow-dag.png) |
+
 | Service | URL |
 |---|---|
 | Dashboard | http://localhost:8050 |
