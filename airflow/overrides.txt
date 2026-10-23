@@ -3,3 +3,13 @@
 certifi==2026.10.19
 pyjwt==2.15.1
 urllib3==2.8.0
+# CVE-2026-114603 in opentelemetry-api 1.44.0: the OpenTelemetry family moves together.
+opentelemetry-api==1.45.1
+opentelemetry-sdk==1.45.1
+opentelemetry-proto==1.45.1
+opentelemetry-exporter-otlp==1.45.1
+opentelemetry-exporter-otlp-proto-common==1.45.1
+opentelemetry-exporter-otlp-proto-grpc==1.45.1
+opentelemetry-exporter-otlp-proto-http==1.45.1
+opentelemetry-semantic-conventions==0.66b1
+opentelemetry-exporter-prometheus==0.66b1
