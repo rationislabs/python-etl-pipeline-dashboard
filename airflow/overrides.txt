@@ -1,6 +1,6 @@
 # Airflow 3.3.2's constraints pin these below versions with published vulnerabilities
 # (pip-audit on the image). The Dockerfile drops those pins and applies these instead.
-certifi==2026.10.19
+certifi==2026.10.23
 pyjwt==2.15.1
 urllib3==2.8.0
 # CVE-2026-114603 in opentelemetry-api 1.44.0: the OpenTelemetry family moves together.
