@@ -13,3 +13,5 @@ opentelemetry-exporter-otlp-proto-grpc==1.45.1
 opentelemetry-exporter-otlp-proto-http==1.45.1
 opentelemetry-semantic-conventions==0.66b1
 opentelemetry-exporter-prometheus==0.66b1
+# CVE-2026-114605 in dnspython 2.8.0.
+dnspython==2.9.0
