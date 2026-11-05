@@ -119,3 +119,5 @@ The first Spark run downloads the Delta Lake jars via Ivy; after that the tests 
 ## Data attribution
 
 Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). ERA5 reanalysis by the Copernicus Climate Change Service.
+
+This project was built with AI assistance.
